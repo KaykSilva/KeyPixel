@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>KeyPixel Studio | Gerenciador de Mídias para ESP32</title>
+    <meta name="description" content="Plataforma de alta performance para gerenciar, converter e enviar vídeos, GIFs e imagens para displays ST7789 em ESP32." />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2300f0ff'><rect x='2' y='2' width='9' height='9' rx='2'/><rect x='13' y='2' width='9' height='9' rx='2'/><rect x='2' y='13' width='9' height='9' rx='2'/><rect x='13' y='13' width='9' height='9' rx='2' fill='%23a855f7'/></svg>" />
+  </head>
+  <body>
+    <div id="app" class="app-root">
+      <!-- Top Navigation & Connection Hub -->
+      <header class="top-nav">
+        <div class="nav-left">
+          <div class="brand">
+            <div class="brand-icon">
+              <span class="pixel-dot p1"></span>
+              <span class="pixel-dot p2"></span>
+              <span class="pixel-dot p3"></span>
+              <span class="pixel-dot p4"></span>
+            </div>
+            <div class="brand-text">
+              <h1>KEYPIXEL <span>STUDIO</span></h1>
+              <p class="brand-sub">ESP32 Media Commander • 240x240 ST7789</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="nav-center">
+          <div class="connection-bar">
+            <div class="connection-status-dot" id="connection-dot" title="Status da conexão"></div>
+            <div class="input-wrapper">
+              <label for="device-url" class="sr-only">Endereço da ESP32</label>
+              <input type="text" id="device-url" value="http://keypixel.local" placeholder="Ex: http://192.168.1.150 ou http://keypixel.local" />
+            </div>
+            <button id="btn-connect" class="btn btn-primary" title="Verificar conexão com a ESP32">
+              <span class="btn-icon">⚡</span>
+              <span class="btn-text">Conectar</span>
+            </button>
+            <button id="btn-wifi-config" class="btn btn-secondary" title="Configurar Wi-Fi da ESP32">
+              <span class="btn-icon">📶</span>
+              <span class="btn-text">Wi-Fi</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="nav-right">
+          <div class="storage-card" id="storage-summary">
+            <div class="storage-header">
+              <span class="storage-label">MEMÓRIA LITTLEFS</span>
+              <span class="storage-text" id="storage-text">Conectando...</span>
+            </div>
+            <div class="progress-bar-container">
+              <div class="progress-bar-fill" id="storage-bar" style="width: 0%"></div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- Main Studio Workspace -->
+      <main class="studio-layout">
+        <!-- Left: Virtual ST7789 Hardware Simulator -->
+        <section class="simulator-panel" aria-label="Simulador de Display">
+          <div class="panel-header">
+            <h2>Hardware Simulator</h2>
+            <div class="sim-badges">
+              <span class="badge badge-accent">240×240 IPS</span>
+              <span class="badge" id="sim-status-badge">Desconectado</span>
+            </div>
+          </div>
+
+          <div class="screen-frame-container">
+            <div class="bezel-case">
+              <div class="bezel-screw screw-tl"></div>
+              <div class="bezel-screw screw-tr"></div>
+              <div class="bezel-screw screw-bl"></div>
+              <div class="bezel-screw screw-br"></div>
+              <div class="power-indicator" id="sim-power-led" title="LED de Alimentação"></div>
+              <span class="bezel-logo">ST7789 • 240×240</span>
+
+              <div class="display-screen" id="sim-display-screen">
+                <canvas id="virtual-screen" width="240" height="240"></canvas>
+                <div class="screen-scanlines" id="screen-scanlines"></div>
+                <div class="screen-placeholder" id="sim-placeholder">
+                  <div class="placeholder-icon">📺</div>
+                  <p>Display em Standby</p>
+                  <span class="placeholder-hint">Conecte à ESP32 ou selecione uma mídia</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="sim-controls">
+            <div class="now-playing-info">
+              <span class="info-label">EM EXIBIÇÃO:</span>
+              <span class="info-value" id="current-playing-name">Nenhuma mídia</span>
+            </div>
+            <div class="sim-actions">
+              <label class="toggle-scanlines">
+                <input type="checkbox" id="chk-scanlines" checked />
+                <span>Efeito CRT/Scanlines</span>
+              </label>
+              <button id="btn-refresh-screen" class="btn btn-sm btn-icon-only" title="Sincronizar Display">
+                🔄
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Right: Studio Creator & Transcoder -->
+        <section class="transcoder-panel" aria-label="Estúdio de Conversão">
+          <div class="panel-header">
+            <div class="tab-buttons" role="tablist">
+              <button class="tab-btn active" id="tab-video" role="tab" aria-selected="true">
+                <span class="tab-icon">🎬</span> Vídeo para GIF
+              </button>
+              <button class="tab-btn" id="tab-image" role="tab" aria-selected="false">
+                <span class="tab-icon">🖼️</span> Imagem
+              </button>
+              <button class="tab-btn" id="tab-gif" role="tab" aria-selected="false">
+                <span class="tab-icon">👾</span> GIF Direto
+              </button>
+            </div>
+            <div class="engine-badge">
+              <span>Client-Side Engine</span>
+            </div>
+          </div>
+
+          <div class="tab-content-wrapper">
+            <!-- Dropzone Area -->
+            <div class="dropzone" id="media-dropzone">
+              <input type="file" id="media-file-input" class="file-input-hidden" accept="video/*,image/*,.gif" />
+              <div class="dropzone-content">
+                <div class="dropzone-icon" id="dropzone-icon">✨</div>
+                <h3 id="dropzone-title">Arraste um vídeo, imagem ou GIF aqui</h3>
+                <p id="dropzone-desc">Suporta MP4, WebM, MOV, PNG, JPG, WebP e GIF (auto-otimizado para 240x240)</p>
+                <button type="button" class="btn btn-secondary btn-upload" id="btn-browse-file">
+                  Escolher Arquivo do Computador
+                </button>
+              </div>
+            </div>
+
+            <!-- Video Studio Editor Controls (Visible when video loaded) -->
+            <div class="editor-section hidden" id="video-editor">
+              <div class="editor-preview-row">
+                <div class="media-preview-box">
+                  <video id="source-video" playsinline muted preload="auto"></video>
+                  <div class="video-overlay-crop">
+                    <div class="crop-guides"></div>
+                  </div>
+                </div>
+
+                <div class="media-params-box">
+                  <h4>Configurações de Transcodificação</h4>
+                  
+                  <div class="form-group">
+                    <div class="label-with-val">
+                      <label for="video-fps">Taxa de Quadros (FPS):</label>
+                      <span class="val-display" id="val-fps">12 FPS</span>
+                    </div>
+                    <input type="range" id="video-fps" min="6" max="24" step="1" value="12" />
+                    <span class="field-hint">Menor FPS = arquivo mais leve para a memória da ESP32.</span>
+                  </div>
+
+                  <div class="form-group">
+                    <label for="video-crop-mode">Enquadramento 240×240:</label>
+                    <select id="video-crop-mode" class="custom-select">
+                      <option value="cover" selected>Preencher (Cover / Corte 1:1)</option>
+                      <option value="contain">Conter com Bordas Pretas (Letterbox)</option>
+                      <option value="stretch">Esticar para 240x240</option>
+                    </select>
+                  </div>
+
+                  <div class="form-group">
+                    <div class="label-with-val">
+                      <label for="color-quality">Cores da Paleta:</label>
+                      <span class="val-display" id="val-colors">128 Cores</span>
+                    </div>
+                    <select id="color-quality" class="custom-select">
+                      <option value="64">64 Cores (Super Leve)</option>
+                      <option value="128" selected>128 Cores (Recomendado)</option>
+                      <option value="256">256 Cores (Alta Definição)</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Video Timeline Trimmer -->
+              <div class="timeline-trimmer">
+                <div class="timeline-header">
+                  <span class="trim-title">✂️ Corte do Trecho (Duração ideal: 2 a 5 segundos)</span>
+                  <span class="trim-duration" id="trim-duration-badge">0.0s / 0.0s</span>
+                </div>
+                <div class="trimmer-track" id="trimmer-track">
+                  <div class="trimmer-highlight" id="trimmer-highlight"></div>
+                  <input type="range" id="trim-start" min="0" max="100" step="0.1" value="0" class="range-thumb start-thumb" />
+                  <input type="range" id="trim-end" min="0" max="100" step="0.1" value="100" class="range-thumb end-thumb" />
+                </div>
+                <div class="timeline-times">
+                  <span>Início: <strong id="val-trim-start">0.0s</strong></span>
+                  <span>Fim: <strong id="val-trim-end">3.0s</strong></span>
+                  <span>Quadros Estimados: <strong id="val-frame-count">36 frames</strong></span>
+                </div>
+              </div>
+
+              <div class="editor-actions">
+                <button id="btn-convert-video" class="btn btn-primary btn-large">
+                  <span class="btn-icon">⚡</span>
+                  <span>Converter para GIF 240×240</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Image Editor Controls (Visible when static image loaded) -->
+            <div class="editor-section hidden" id="image-editor">
+              <div class="editor-preview-row">
+                <div class="media-preview-box">
+                  <canvas id="image-crop-canvas" width="240" height="240"></canvas>
+                </div>
+                <div class="media-params-box">
+                  <h4>Ajustes da Imagem (240×240)</h4>
+                  
+                  <div class="form-group">
+                    <div class="label-with-val">
+                      <label for="img-zoom">Zoom / Escala:</label>
+                      <span class="val-display" id="val-img-zoom">100%</span>
+                    </div>
+                    <input type="range" id="img-zoom" min="50" max="300" step="5" value="100" />
+                  </div>
+
+                  <div class="form-group">
+                    <div class="label-with-val">
+                      <label for="img-contrast">Contraste:</label>
+                      <span class="val-display" id="val-img-contrast">100%</span>
+                    </div>
+                    <input type="range" id="img-contrast" min="50" max="200" step="5" value="100" />
+                  </div>
+
+                  <div class="form-group">
+                    <label class="checkbox-label">
+                      <input type="checkbox" id="chk-pixelate" />
+                      <span>Efeito Pixel Art (Retro Dithering)</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div class="editor-actions">
+                <button id="btn-convert-image" class="btn btn-primary btn-large">
+                  <span class="btn-icon">🖼️</span>
+                  <span>Gerar Mídia 240×240</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- GIF Optimizer Editor (Visible when GIF loaded) -->
+            <div class="editor-section hidden" id="gif-direct-editor">
+              <div class="editor-preview-row">
+                <div class="media-preview-box">
+                  <img id="source-gif-preview" alt="Preview do GIF" />
+                </div>
+                <div class="media-params-box">
+                  <h4>Otimizador de GIF para ESP32</h4>
+                  <div class="file-stats-group">
+                    <p class="file-stat">Arquivo: <strong id="gif-stat-name">-</strong></p>
+                    <p class="file-stat">Tamanho Original: <strong id="gif-stat-size">-</strong></p>
+                    <p class="file-stat">Dimensões: <strong id="gif-stat-dim">Detectando...</strong></p>
+                    <p class="file-stat">Total de Quadros: <strong id="gif-stat-frames">Detectando...</strong></p>
+                  </div>
+
+                  <div class="alert-box" id="gif-warning-box">
+                    ⚠️ <strong>Por que GIFs de 1MB+ não reproduzem?</strong> A ESP32-C3 possui cerca de 100KB de RAM livre. GIFs em alta resolução (ex: 480x480) ou com muitos frames estouram a memória da placa. Use a otimização abaixo para gerar um GIF de 240×240 ultraleve (~60-150KB) que roda com 100% de fluidez.
+                  </div>
+
+                  <div class="form-group">
+                    <label for="gif-crop-mode">Enquadramento 240×240:</label>
+                    <select id="gif-crop-mode" class="custom-select">
+                      <option value="cover" selected>Preencher (Cover / Corte 1:1 centralizado)</option>
+                      <option value="contain">Conter com Bordas Pretas (Letterbox)</option>
+                    </select>
+                  </div>
+
+                  <div class="form-group">
+                    <label for="gif-frame-skip">Redução de Quadros (Compressão):</label>
+                    <select id="gif-frame-skip" class="custom-select">
+                      <option value="1">Manter todos os quadros</option>
+                      <option value="2" selected>Pular 1 a cada 2 frames (Reduz tamanho pela metade!)</option>
+                      <option value="3">Pular 2 a cada 3 frames (Ideal para GIFs longos de 1MB a 5MB)</option>
+                    </select>
+                    <span class="field-hint">Pular frames reduz o uso de RAM e acelera o carregamento na ESP32.</span>
+                  </div>
+
+                  <div class="form-group">
+                    <label for="gif-colors">Paleta de Cores:</label>
+                    <select id="gif-colors" class="custom-select">
+                      <option value="64">64 Cores (Super Compacto)</option>
+                      <option value="128" selected>128 Cores (Recomendado)</option>
+                      <option value="256">256 Cores (Máxima Qualidade)</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div class="editor-actions">
+                <button id="btn-optimize-gif" class="btn btn-primary btn-large">
+                  <span class="btn-icon">⚡</span>
+                  <span>Otimizar & Converter para 240×240</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Conversion Progress Bar -->
+            <div class="conversion-progress-box hidden" id="conversion-progress">
+              <div class="progress-info">
+                <span class="progress-status-text" id="progress-status-text">Processando frames...</span>
+                <span class="progress-percentage" id="progress-percentage">0%</span>
+              </div>
+              <div class="progress-bar-container large">
+                <div class="progress-bar-fill animated" id="conversion-bar-fill" style="width: 0%"></div>
+              </div>
+            </div>
+
+            <!-- Ready / Export Box (Shows after conversion or GIF selection) -->
+            <div class="export-box hidden" id="export-box">
+              <div class="export-header">
+                <div class="export-badge">Pronto para Enviar!</div>
+                <div class="export-meta">
+                  <span>Arquivo: <strong id="export-filename">animacao.gif</strong></span>
+                  <span>Tamanho: <strong id="export-filesize">0 KB</strong></span>
+                </div>
+              </div>
+
+              <div class="export-preview-row">
+                <img id="export-preview-img" class="export-preview-img" alt="Resultado Final 240x240" />
+                <div class="export-actions-group">
+                  <button id="btn-send-to-esp" class="btn btn-primary btn-send">
+                    <span class="btn-icon">🚀</span>
+                    <span>Enviar para a ESP32</span>
+                  </button>
+                  <button id="btn-download-local" class="btn btn-secondary">
+                    <span class="btn-icon">⬇</span>
+                    <span>Baixar no PC</span>
+                  </button>
+                  <button id="btn-cancel-export" class="btn btn-ghost">
+                    Descartar
+                  </button>
+                </div>
+              </div>
+
+              <!-- Uploading to ESP32 Status -->
+              <div class="upload-progress-box hidden" id="upload-progress-box">
+                <div class="progress-info">
+                  <span id="upload-status-text">Gravando na flash LittleFS...</span>
+                  <span id="upload-percentage">0%</span>
+                </div>
+                <div class="progress-bar-container">
+                  <div class="progress-bar-fill accent" id="upload-bar-fill" style="width: 0%"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <!-- Bottom: ESP32 LittleFS File Manager & Gallery -->
+      <section class="gallery-section" aria-label="Gerenciador de Arquivos na ESP32">
+        <div class="gallery-header">
+          <div class="gallery-title-group">
+            <h2>Mídias Salvas na ESP32</h2>
+            <span class="file-count-badge" id="file-count-badge">0 arquivos</span>
+          </div>
+
+          <div class="gallery-actions">
+            <button id="btn-refresh-files" class="btn btn-secondary" title="Recarregar lista da ESP32">
+              <span class="btn-icon">🔄</span>
+              <span>Atualizar Galeria</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="files-grid" id="files-grid">
+          <div class="empty-gallery" id="empty-gallery">
+            <div class="empty-icon">📁</div>
+            <p>Nenhuma mídia encontrada na memória LittleFS</p>
+            <span>Converta e envie um GIF ou vídeo acima para ver aqui!</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Wi-Fi Settings Modal -->
+      <div class="modal-backdrop hidden" id="wifi-modal">
+        <div class="modal-card">
+          <div class="modal-header">
+            <h3>📶 Configurar Wi-Fi da ESP32</h3>
+            <button id="btn-close-modal" class="btn-close">&times;</button>
+          </div>
+          <div class="modal-body">
+            <p class="modal-desc">
+              Salve o nome e senha da sua rede Wi-Fi residencial na memória não-volátil (NVS) da ESP32.
+              A placa se conectará automaticamente e responderá em <code>http://keypixel.local</code>.
+            </p>
+            <form id="wifi-form">
+              <div class="form-group">
+                <label for="wifi-ssid">Nome da Rede Wi-Fi (SSID):</label>
+                <input type="text" id="wifi-ssid" placeholder="Ex: MinhaCasa_2.4G" required />
+              </div>
+              <div class="form-group">
+                <label for="wifi-pass">Senha do Wi-Fi:</label>
+                <input type="password" id="wifi-pass" placeholder="Senha da rede..." />
+              </div>
+              <div class="modal-actions">
+                <button type="button" id="btn-cancel-wifi" class="btn btn-secondary">Cancelar</button>
+                <button type="submit" class="btn btn-primary">Salvar & Conectar</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- Toast Notification Container -->
+      <div id="toast-container" class="toast-container" aria-live="polite"></div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

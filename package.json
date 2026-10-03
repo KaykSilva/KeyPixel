@@ -1,0 +1,18 @@
+{
+  "name": "keypixel",
+  "version": "1.0.0",
+  "description": "Plataforma para gerenciar e enviar GIFs, imagens e vídeos para ESP32-C3 com display ST7789",
+  "scripts": {
+    "dev": "npm --prefix web run dev",
+    "build": "npm --prefix web run build",
+    "preview": "npm --prefix web run preview",
+    "esp:build": "~/.platformio/penv/bin/pio run",
+    "esp:upload": "~/.platformio/penv/bin/pio run -t upload",
+    "esp:uploadfs": "~/.platformio/penv/bin/pio run -t uploadfs",
+    "esp:monitor": "~/.platformio/penv/bin/pio device monitor",
+    "gif:optimize": "python3 tools/convert_gif.py"
+  },
+  "keywords": ["esp32", "st7789", "gif", "pixelart", "iot"],
+  "author": "KaykSilva",
+  "license": "MIT"
+}
